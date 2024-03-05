@@ -96,13 +96,18 @@ class QTrainer:
             Q = self.Q
         return max(Q[state].items(), key=lambda x: x[1])
     
+    def sigmoid(self, array):
+        return 1 / (1 + np.exp(-array))
     
-    def q_learning_train(self, num_episodes=10000, print_interval=2000):
+    
+    def q_learning_train(self, num_episodes=10000, irl=False, weight=None, print_interval=2000):
         """
         Train a Q-learning agent through multiple episodes.
 
         Parameters:
         - num_episodes: Number of training episodes.
+        - irl: if True, trains using obtained reward
+        - weight: Weight obtained from the IRL algorithm.
         - print_interval(Optional): Interval for printing training progress.
 
         Returns:
@@ -110,7 +115,7 @@ class QTrainer:
         - episode_rewards: List of rewards for each episode.
         - Q: Trained Q-table.
         """
-
+        Q = self.init_Q()
         episode_lengths = []
         episode_rewards = []
 
@@ -129,20 +134,27 @@ class QTrainer:
                 if np.random.uniform() < epsilon:
                     action = self.env.action_space.sample()  # epsilon-greedy exploration
                 else:
-                    action = self.get_best_action_value(state)[0]   # action with max value
+                    action = self.get_best_action_value(state, Q)[0]   # action with max value
 
                 observation, reward, done, _ = self.env.step(action)
+                
+                new_state = self.get_state_as_str(self.assign_bins(observation))
+
+                if irl:
+                    observation = self.sigmoid(observation)
+
+                    # discard the simulation reward and use the reward function found from the IRL algorithm
+                    reward = np.dot(weight, observation)     # wT · φ
 
                 total_reward += reward
 
+                neg_reward = -1 if irl else -300
                 # penalize early episode termination
                 if done and move_count < 200:
-                    reward = -300
+                    reward = neg_reward
 
-                new_state = self.get_state_as_str(self.assign_bins(observation))
-
-                best_action, max_q_s1a1 = self.get_best_action_value(new_state)
-                self.Q[state][action] += self.ALPHA * (reward + self.GAMMA * max_q_s1a1 - self.Q[state][action])
+                best_action, max_q_s1a1 = self.get_best_action_value(new_state, Q)
+                Q[state][action] += self.ALPHA * (reward + self.GAMMA * max_q_s1a1 - Q[state][action])
                 state = new_state
 
             episode_reward, episode_length = total_reward, move_count
@@ -152,13 +164,19 @@ class QTrainer:
 
             episode_lengths.append(episode_length)
             episode_rewards.append(episode_reward)
+            
+        if not irl:
+            self.Q = Q
+
+        if irl:
+            avg_length = np.average(episode_lengths)
+            std_dev_length = np.std(episode_lengths)
+
+            print(f"Avg Length: {avg_length} \nStandard Deviation: {std_dev_length}")
 
         self.env.close()
-
-        self.episode_lengths = episode_lengths
-        self.episode_rewards = episode_rewards
         
-        return episode_lengths, episode_rewards, self.Q
+        return episode_lengths, episode_rewards, Q
     
     
     def run_policy(self, Q=None, num_episodes=1000, render=False, render_filename='Agent Policy'):
@@ -212,7 +230,7 @@ class QTrainer:
         if not total_rewards:
             total_rewards = self.total_rewards
             
-        fig = plt.figure()
+        fig = plt.figure(figsize=(8,6))
         num_episodes = len(total_rewards)
         running_avg = np.empty(num_episodes)
 
