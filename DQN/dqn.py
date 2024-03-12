@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 from IPython import display
 import os
+from tqdm import tqdm
 import imageio
 
 import torch
@@ -98,7 +99,8 @@ class DQNTrainer:
             try:
                 self.is_trained = True
                 data = torch.load(load_path)
-                print('Loaded Model.')
+                self.policy_net.load_state_dict(data)
+                self.best_model = self.policy_net
             except (FileNotFoundError, torch.cuda.CudaError, RuntimeError, KeyError) as e:
                 print(f"Error loading pretrained model: {e}")
         
@@ -243,10 +245,13 @@ class DQNTrainer:
         self.optimizer.step()
 
 
-    def dqn_train(self, reward_weight=None, print_every=25, plot_save_path=None):
+    def dqn_train(self, reward_weight=None, plot_save_path=None, dynamic_plot=False):
         """
         Train the agent using Double DQN.
         """
+        if not dynamic_plot:
+            progress_bar = tqdm(total=self.num_episodes, desc="Training..")
+        
         for i_episode in range(self.num_episodes):
 
             # Initialize the environment and get its state
@@ -292,10 +297,11 @@ class DQNTrainer:
                 self.optimize_model()
 
                 # break if episode is done or exceeds a maximum number of steps
-                if done or t > 3000:
+                if done or t > 200:
                     self.episode_durations.append(t + 1)
                     performance = torch.tensor(self.episode_durations, dtype=torch.float).numpy()
-                    self.plot_progress(performance)
+                    if dynamic_plot:
+                        self.plot_progress(performance)
                     break
 
             # test model (after at least 100 episodes)
@@ -306,10 +312,15 @@ class DQNTrainer:
             # update the target network weights every TARGET_UPDATE episodes
             if i_episode % self.TARGET_UPDATE == 0:
                 self.target_net.load_state_dict(self.policy_net.state_dict())
+                
+            if not dynamic_plot:
+                progress_bar.update(1)
 
         # Done training
-        display.clear_output()
-        print('\nTraining Complete.')
+        if dynamic_plot:
+            display.clear_output()
+        else:
+            progress_bar.close()
         self.is_trained = True
         plt.figure(figsize=(10,8))
         plt.plot(performance)
@@ -341,7 +352,7 @@ class DQNTrainer:
         feature_vector = torch.tensor([
             x, x_dot, theta, theta_dot,
             x ** 2, x_dot ** 2, theta ** 2, theta_dot ** 2,
-        ])
+        ], dtype=torch.float)
 
         return feature_vector
 
@@ -377,7 +388,7 @@ class DQNTrainer:
 
                 episode_reward += reward
 
-                if done or t > 30000:
+                if done or t > 200:
                     break
 
         # Based on the total reward for the episode, determine the best model
