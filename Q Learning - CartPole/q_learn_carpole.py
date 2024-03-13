@@ -5,6 +5,7 @@ import imageio
 import matplotlib.pyplot as plt
 from IPython.display import clear_output, display, Image
 
+# Train agent using Q Learning
 class QTrainer:
     
     def __init__(self, env, nbins=10, GAMMA=0.9, ALPHA=0.01):

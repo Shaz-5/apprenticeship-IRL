@@ -22,7 +22,7 @@ import torchvision.transforms as T
 import gym
 
 
-# Neural Network for Deep Q Learning (DQN)
+# Neural Network for (Double) Deep Q Learning (DQN)
 class DQN(nn.Module):
     def __init__(self, n_observations=4, hidden_layer_size=64, n_actions=2):
         super(DQN, self).__init__()
@@ -58,14 +58,13 @@ class ReplayMemory(object):
         return len(self.memory)
     
     
-# Class for training agent (expert) 
-
-class DQNTrainer:
+# Class for training agent
+class DDQNTrainer:
     
     BATCH_SIZE = 128
     GAMMA = 0.999
-    EPS_START = 0.95
-    EPS_END = 0.05
+    EPS_MAX = 0.95
+    EPS_MIN = 0.05
     TARGET_UPDATE = 10
     resize = T.Compose([T.ToPILImage(),T.Resize(40, interpolation=Image.BICUBIC),T.ToTensor()])
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -74,7 +73,7 @@ class DQNTrainer:
         
         self.env = env
         if save_path:
-            self.env = gym.wrappers.Monitor(env, save_path, video_callable=lambda x: x % 199 == 0, force=True)
+            self.env = gym.wrappers.Monitor(env, save_path, video_callable=lambda x: x % (self.num_episodes-1) == 0, force=True)
         self.env.reset()
         
         self.policy_net = DQN().to(self.device)
@@ -162,7 +161,7 @@ class DQNTrainer:
         Select an action according to an epsilon greedy policy.
         """
         sample = random.random()
-        eps_threshold = self.EPS_END + (self.EPS_START - self.EPS_END) * \
+        eps_threshold = self.EPS_MIN + (self.EPS_MAX - self.EPS_MIN) * \
             math.exp(-1. * self.steps_done / self.EPS_DECAY)
         self.steps_done += 1
         if sample > eps_threshold:
@@ -304,7 +303,7 @@ class DQNTrainer:
                         self.plot_progress(performance)
                     break
 
-            # test model (after at least 100 episodes)
+            # test model (after at least half episodes are done)
             policy_reward = 0
             if i_episode > self.num_episodes//2:
                 policy_reward = self.test_model(self.policy_net)
