@@ -69,11 +69,9 @@ class DDQNTrainer:
     resize = T.Compose([T.ToPILImage(),T.Resize(40, interpolation=Image.BICUBIC),T.ToTensor()])
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    def __init__(self, env, agent, num_episodes = 200, save_path=None, load_path=None):
+    def __init__(self, env, agent, num_episodes = 200, load_path=None):
         
         self.env = env
-        if save_path:
-            self.env = gym.wrappers.Monitor(env, save_path, video_callable=lambda x: x % (self.num_episodes-1) == 0, force=True)
         self.env.reset()
         
         self.policy_net = DQN().to(self.device)
@@ -244,12 +242,16 @@ class DDQNTrainer:
         self.optimizer.step()
 
 
-    def dqn_train(self, reward_weight=None, plot_save_path=None, dynamic_plot=False):
+    def dqn_train(self, reward_weight=None, plot_save_path=None, render_save_path=None, dynamic_plot=False):
         """
         Train the agent using Double DQN.
         """
         if not dynamic_plot:
             progress_bar = tqdm(total=self.num_episodes, desc="Training..")
+            
+        if render_save_path:
+            self.env = gym.wrappers.Monitor(self.env, render_save_path, 
+                                            video_callable=lambda x: x % (self.num_episodes-1) == 0, force=True)
         
         for i_episode in range(self.num_episodes):
 
@@ -264,18 +266,6 @@ class DDQNTrainer:
 
                 if reward_weight is None:
                     reward = torch.tensor([reward], device=self.device)
-                    x, x_dot, theta, theta_dot = observation
-
-                    # calculate the normalized distance of the cart's center from the edges of the screen
-                    # penalize the agent for being close to the edges, encouraging it to stay away
-                    r1 = (self.env.unwrapped.x_threshold - abs(x)) / self.env.unwrapped.x_threshold - 0.8
-
-                    # calculate the normalized remaining angular range before the pole reaches its maximum angle
-                    # penalize the agent for having the pole at a large angle, to keep the pole more upright
-                    r2 = (self.env.unwrapped.theta_threshold_radians - abs(theta)) / \
-                          self.env.unwrapped.theta_threshold_radians - 0.5
-
-                    reward = torch.tensor([r1 + r2])
 
                 else:
                     # use rewards calculated using weights (IRL)
@@ -296,7 +286,7 @@ class DDQNTrainer:
                 self.optimize_model()
 
                 # break if episode is done or exceeds a maximum number of steps
-                if done or t > 200:
+                if done:
                     self.episode_durations.append(t + 1)
                     performance = torch.tensor(self.episode_durations, dtype=torch.float).numpy()
                     if dynamic_plot:
@@ -387,7 +377,7 @@ class DDQNTrainer:
 
                 episode_reward += reward
 
-                if done or t > 200:
+                if done:
                     break
 
         # Based on the total reward for the episode, determine the best model
