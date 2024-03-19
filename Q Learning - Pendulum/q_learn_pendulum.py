@@ -77,7 +77,6 @@ class QTrainer:
             self.env = gym.wrappers.Monitor(self.env, render_save_path, 
                                             video_callable=lambda x: x % (num_episodes//10) == 0, force=True)
         Q = self.init_Q()
-        episode_lengths = []
         episode_rewards = []
         epsilon = 1
         epsilon_final = 0.1
@@ -105,21 +104,19 @@ class QTrainer:
                 new_state = self.discretize_state(observation)
 
                 if irl:
-                    observation = -1 * self.sigmoid(observation)
+                    observation = self.sigmoid(observation)
 
                     # discard the simulation reward and use the reward function found from the IRL algorithm
-                    reward = np.dot(weight, observation)     # wT · φ
+                    irl_reward = np.dot(weight, observation)     # wT · φ
 
                 total_reward += reward
 
-                neg_reward = -1 if irl else -300
-                # penalize early episode termination
-                if done and move_count < 200:
-                    reward = neg_reward
-
                 max_q_s1a1 = np.max(Q[new_state])
                 current_q = Q[state + (action,)]
-                new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (reward + self.GAMMA * max_q_s1a1)
+                if not irl:
+                    new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (reward + self.GAMMA * max_q_s1a1)
+                else:
+                    new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (irl_reward + self.GAMMA * max_q_s1a1)
                 
                 Q[state + (action,)] = new_q
                 
@@ -132,29 +129,28 @@ class QTrainer:
             if epsilon >= epsilon_final:
                 epsilon *= epsilon_decay
                 
-            episode_reward, episode_length = total_reward, move_count
+            episode_reward = total_reward
 
             if save_q_path and episode % 10 == 0:
                 np.save(save_q_path, Q)
                 
             if episode % print_interval == 0:
-                print(f"Episode: {episode}, Epsilon: {epsilon:.4f}, Reward: {episode_reward}")
+                print(f"Episode: {episode}, Reward: {episode_reward}")
 
-            episode_lengths.append(episode_length)
             episode_rewards.append(episode_reward)
             
         if not irl:
             self.Q = Q
 
         if irl:
-            avg_length = np.average(episode_lengths)
-            std_dev_length = np.std(episode_lengths)
+            avg_reward = np.average(episode_rewards)
+            std_dev_reward = np.std(episode_rewards)
 
-            print(f"Avg Length: {avg_length} \nStandard Deviation: {std_dev_length}")
+            print(f"Avg Reward: {avg_reward} \nStandard Deviation: {std_dev_reward}")
 
         self.env.close()
         
-        return episode_lengths, episode_rewards, Q
+        return episode_rewards, Q
         
     
     def run_policy(self, Q=None, num_episodes=1000, render=False, render_filename='Agent Policy'):
