@@ -300,7 +300,7 @@ class DDQNTrainer:
         Normalize state components and construct a feature vector for given state.
         """
         # Normalize state components - horizontal position, velocity, angle of the pole, angular velocity
-        x, y, thetha_dot = state
+        x, y, theta_dot = state
         x = (x + self.env.observation_space.high[0]) / (2 * self.env.observation_space.high[0])
         y = (y + self.env.observation_space.high[0]) / (2 * self.env.observation_space.high[0])
         theta_dot = (theta_dot + self.env.unwrapped.max_speed) / (2 * self.env.unwrapped.max_speed)
