@@ -8,7 +8,7 @@ from IPython.display import clear_output, display, Image
 # Train agent using Q Learning
 class QTrainer:
     
-    def __init__(self, env, discrete_space_size=[21, 21, 65], discrete_act_size=17, GAMMA=0.95, ALPHA=0.1):
+    def __init__(self, env, discrete_space_size=[21, 21, 65], discrete_act_size=9, GAMMA=0.95, ALPHA=0.1):
         self.env = env
         self.GAMMA = GAMMA
         self.ALPHA = ALPHA
@@ -113,10 +113,7 @@ class QTrainer:
 
                 max_q_s1a1 = np.max(Q[new_state])
                 current_q = Q[state + (action,)]
-                if not irl:
-                    new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (reward + self.GAMMA * max_q_s1a1)
-                else:
-                    new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (irl_reward + self.GAMMA * max_q_s1a1)
+                new_q = (1 - self.ALPHA) * current_q + self.ALPHA * (reward + self.GAMMA * max_q_s1a1)
                 
                 Q[state + (action,)] = new_q
                 
