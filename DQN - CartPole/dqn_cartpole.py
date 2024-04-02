@@ -66,6 +66,7 @@ class DDQNTrainer:
     EPS_MAX = 0.95
     EPS_MIN = 0.05
     TARGET_UPDATE = 10
+    TAU = 0.005
     resize = T.Compose([T.ToPILImage(),T.Resize(40, interpolation=Image.BICUBIC),T.ToTensor()])
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
@@ -272,7 +273,6 @@ class DDQNTrainer:
                     features = self.construct_feature_vector(observation)
                     reward = reward_weight.t() @ features                 # w^T ⋅ φ
 
-                # terminate
                 if done:
                     next_state = None
 
@@ -284,6 +284,14 @@ class DDQNTrainer:
 
                 # perform one step of the optimization (on the target network)
                 self.optimize_model()
+                
+                # Soft update of the target network's weights
+                # θ′ ← τ θ + (1 −τ )θ′
+                target_net_state_dict = self.target_net.state_dict()
+                policy_net_state_dict = self.policy_net.state_dict()
+                for key in policy_net_state_dict:
+                    target_net_state_dict[key] = policy_net_state_dict[key]*self.TAU + target_net_state_dict[key]*(1-self.TAU)
+                self.target_net.load_state_dict(target_net_state_dict)
 
                 # break if episode is done or exceeds a maximum number of steps
                 if done:

@@ -45,7 +45,7 @@ One approach to implementing this is the Projection Method Algorithm, which iter
 
 ### Deep Q-Learning
 
-* We utilize Double Deep Q Learning to train an expert cartpole agent for 300 iterations.
+* We utilize Double Deep Q Learning to train an expert cartpole agent for 400 iterations.
 * The policy is represented by the Q-value function learned by the neural network.
 * A policy network and target network is used in the Double DQN.
 
